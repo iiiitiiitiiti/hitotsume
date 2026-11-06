@@ -7,7 +7,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkDay, isPublicUrl, parseNoteApi, pickIcon, parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "./parse.ts";
+import { checkDay, isPrTitle, isPublicUrl, keepNote, parseNoteApi, parseNoteTags, pickIcon, parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "./parse.ts";
 
 export const PORT = 47615;
 // 2: note を {order, items} で返す・/calendar に date を足した。3: /icon を足した
@@ -102,19 +102,44 @@ async function loadSeeds(): Promise<Result> {
 }
 
 /** タグの人気記事。人気順の窓口（非公式）が使えなければ、公式の RSS の新着に切り替える */
+const noteInit = () => ({ headers: { "User-Agent": "hitotsume-helper/1" }, signal: AbortSignal.timeout(10_000) });
+
+/** 記事ごとのタグ。記事のタグはめったに変わらないので1日控える。読めなければ null（その記事は出さない） */
+const noteTagCache = new Map<string, { at: number; tags: string[] | null }>();
+async function noteTags(key: string): Promise<string[] | null> {
+  const hit = noteTagCache.get(key);
+  if (hit && Date.now() - hit.at < 24 * 60 * MIN) return hit.tags;
+  let tags: string[] | null = null;
+  try {
+    const res = await fetch(`https://note.com/api/v3/notes/${key}`, noteInit());
+    if (res.ok) tags = parseNoteTags(await res.json());
+  } catch {
+    // 読めなかった記事は出さない
+  }
+  if (noteTagCache.size > 2000) noteTagCache.clear();
+  noteTagCache.set(key, { at: Date.now(), tags });
+  return tags;
+}
+
+/** 人気の上位から、タグを付けすぎた記事と PR の記事を外して5件。一度に読む記事の詳しい情報は20件まで */
 async function loadNote(tagName: string): Promise<Result> {
   const t = encodeURIComponent(tagName);
-  const init = () => ({ headers: { "User-Agent": "hitotsume-helper/1" }, signal: AbortSignal.timeout(10_000) });
   try {
-    const res = await fetch(`https://note.com/api/v3/hashtags/${t}/notes?order=hot&page=1`, init());
+    const res = await fetch(`https://note.com/api/v3/hashtags/${t}/notes?order=hot&page=1`, noteInit());
     if (res.ok) {
-      const items = parseNoteApi(await res.json(), 5);
+      const candidates = parseNoteApi(await res.json(), 50).filter((n) => !isPrTitle(n.title));
+      const items = [];
+      for (const n of candidates.slice(0, 20)) {
+        const tags = await noteTags(n.url.slice(n.url.lastIndexOf("/") + 1));
+        if (tags && keepNote(n.title, tags)) items.push(n);
+        if (items.length >= 5) break;
+      }
       if (items.length > 0) return { ok: true, data: { order: "hot", items } };
     }
   } catch {
     // RSS へ
   }
-  const res = await fetch(`https://note.com/hashtag/${t}/rss`, init());
+  const res = await fetch(`https://note.com/hashtag/${t}/rss`, noteInit());
   if (!res.ok) return { ok: false, reason: "fetch_failed" };
   return { ok: true, data: { order: "new", items: parseNoteRss(await res.text(), 5) } };
 }

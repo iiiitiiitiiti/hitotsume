@@ -34,7 +34,7 @@ powershell -ExecutionPolicy Bypass -File helper\install-startup.ps1 -Remove
 | 予定 | 起動中の Outlook（クラシック版）の予定表。画面で選んだ日の分を読む。Outlook が閉じていれば読まない |
 | Tech News | `G:\マイドライブ\Bookmarklet plug-in\local\docs\technews\` の日別 Markdown の「今朝のハイライト」 |
 | 作問の種 | `G:\マイドライブ\クイズ\Claude資料\作問の種\` の日別 Markdown |
-| note | タグの人気記事（note の非公式の窓口）。取れなければ `https://note.com/hashtag/{タグ}/rss` の新着 |
+| note | タグの人気記事（note の非公式の窓口）。タグを11個以上付けた記事と PR の記事は外す。取れなければ `https://note.com/hashtag/{タグ}/rss` の新着 |
 | よく見るサイトのアイコン | そのページが指定するアイコン。ログインが要るページは Google が控えているアイコン |
 | Claude の使用量 | `~/.claude/.credentials.json` のログインで Anthropic の使用量を問い合わせる（非公式の窓口。読むだけで、ログインの更新はしない） |
 

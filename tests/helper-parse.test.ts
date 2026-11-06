@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkDay, isPublicUrl, parseNoteApi, pickIcon, parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "../helper/parse";
+import { checkDay, isPrTitle, isPublicUrl, keepNote, MAX_NOTE_TAGS, parseNoteApi, parseNoteTags, pickIcon, parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "../helper/parse";
 
 describe("pickDailyFile", () => {
   it("今日の分があればそれ、同日の再実行は番号の大きい方", () => {
@@ -118,6 +118,28 @@ describe("parseNoteApi", () => {
   it("形が違えば空", () => {
     expect(parseNoteApi(null)).toEqual([]);
     expect(parseNoteApi({ data: {} })).toEqual([]);
+  });
+});
+
+describe("note のふるい分け", () => {
+  it("記事の詳しい情報からタグの名前を取り出す", () => {
+    const raw = { data: { hashtag_notes: [{ hashtag: { name: "#デザイン" } }, { hashtag: null }, { hashtag: { name: "#UI" } }] } };
+    expect(parseNoteTags(raw)).toEqual(["#デザイン", "#UI"]);
+    expect(parseNoteTags({ data: {} })).toBeNull();
+    expect(parseNoteTags(null)).toBeNull();
+  });
+  it("タグが多すぎる記事と PR の記事を外す", () => {
+    const tags = (n: number) => Array.from({ length: n }, (_, i) => `#t${i}`);
+    expect(keepNote("企画の定義", ["#デザイン", "#企画", "#計画"])).toBe(true);
+    expect(keepNote("ちょうど上限", tags(MAX_NOTE_TAGS))).toBe(true);
+    expect(keepNote("付けすぎ", tags(MAX_NOTE_TAGS + 1))).toBe(false);
+    expect(keepNote("写真をアニメ化", ["#デザイン", "#PR"])).toBe(false);
+    expect(keepNote("【PR】サイト作成", ["#デザイン"])).toBe(false);
+  });
+  it("題名の PR は括弧つきか先頭のものだけ。言葉としての PR は残す", () => {
+    expect(isPrTitle("［PR］新しい道具")).toBe(true);
+    expect(isPrTitle("PR｜新商品")).toBe(true);
+    expect(isPrTitle("デザインの PR 戦略")).toBe(false);
   });
 });
 

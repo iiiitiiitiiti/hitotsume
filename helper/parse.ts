@@ -157,6 +157,33 @@ export function parseNoteApi(raw: unknown, limit = 5): NoteItem[] {
   return items;
 }
 
+/**
+ * 記事の詳しい情報（`/api/v3/notes/{key}`）から、付いているタグの名前を取り出す。形が違えば null。
+ * 名前は「#デザイン」のように # から始まる
+ */
+export function parseNoteTags(raw: unknown): string[] | null {
+  const list = (raw as { data?: { hashtag_notes?: unknown } } | null)?.data?.hashtag_notes;
+  if (!Array.isArray(list)) return null;
+  return list
+    .map((h) => (h as { hashtag?: { name?: unknown } | null } | null)?.hashtag?.name)
+    .filter((name): name is string => typeof name === "string");
+}
+
+/** これより多くタグを付けた記事は出さない。人気の上位には、タグを15〜25個付けて広く出す記事が多かった（2026-11-06） */
+export const MAX_NOTE_TAGS = 10;
+
+const PR_TITLE = /[【［[（(]\s*PR\s*[】］\]）)]|^PR[\s：:｜|]/i;
+const PR_TAGS = new Set(["#pr", "#pr案件", "#プロモーション", "#アフィリエイト", "#広告"]);
+
+/** 題名に PR と書いた記事は、タグを読む前に外す */
+export const isPrTitle = (title: string) => PR_TITLE.test(title);
+
+/** タグを付けすぎた記事と、PR の記事を外す */
+export function keepNote(title: string, tags: string[]): boolean {
+  if (isPrTitle(title) || tags.length > MAX_NOTE_TAGS) return false;
+  return !tags.some((t) => PR_TAGS.has(t.toLowerCase()));
+}
+
 type RawLimit = {
   kind?: string;
   group?: string;
