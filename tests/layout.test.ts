@@ -12,6 +12,13 @@ const ev = (subject: string, s: number, e: number, allDay = false): CalendarEven
 });
 
 describe("layoutDay", () => {
+  it("別の日を指せば、その日の予定を並べ、今の線は出さない", () => {
+    const tomorrow = [ev("朝会", at(10, 0, 1), at(11, 0, 1)), ev("今日の分", at(15), at(16))];
+    const l = layoutDay(tomorrow, at(13), at(12, 0, 1));
+    expect(l.blocks.map((b) => [b.event.subject, b.past])).toEqual([["朝会", false]]);
+    expect(l.nowAt).toBeNull();
+  });
+
   it("予定が無ければ 9〜19 時の軸で、次の予定は無い", () => {
     const l = layoutDay([], at(13, 5));
     expect([l.startHour, l.endHour]).toEqual([9, 19]);

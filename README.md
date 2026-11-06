@@ -31,10 +31,10 @@ powershell -ExecutionPolicy Bypass -File helper\install-startup.ps1 -Remove
 
 | 欄 | 係が読むもの |
 |---|---|
-| 今日の予定 | 起動中の Outlook（クラシック版）の予定表。Outlook が閉じていれば読まない |
+| 予定 | 起動中の Outlook（クラシック版）の予定表。画面で選んだ日の分を読む。Outlook が閉じていれば読まない |
 | Tech News | `G:\マイドライブ\Bookmarklet plug-in\local\docs\technews\` の日別 Markdown の「今朝のハイライト」 |
 | 作問の種 | `G:\マイドライブ\クイズ\Claude資料\作問の種\` の日別 Markdown |
-| note | `https://note.com/hashtag/{タグ}/rss` |
+| note | タグの人気記事（note の非公式の窓口）。取れなければ `https://note.com/hashtag/{タグ}/rss` の新着 |
 | Claude の使用量 | `~/.claude/.credentials.json` のログインで Anthropic の使用量を問い合わせる（非公式の窓口。読むだけで、ログインの更新はしない） |
 
 フォルダは環境変数 `HITOTSUME_TECHNEWS_DIR`・`HITOTSUME_SEEDS_DIR` で差し替えられます。
@@ -49,7 +49,7 @@ powershell -ExecutionPolicy Bypass -File helper\install-startup.ps1 -Remove
 | 直前の操作を元に戻す | 元に戻す（8秒表示） | Ctrl+Z |
 | 入力をやめる | やめる | Esc |
 
-1文字のキーは入力欄の外でだけ使えます。よく見るサイトは右上の「＋」から足す・消す、天気の場所は天気の欄の地名、note のタグは「タグを変える」から変えます。
+1文字のキーは入力欄の外でだけ使えます。よく見るサイトは右上の「＋」から足す・消す、天気の場所は天気の欄の地名、note のタグは「タグを変える」から変えます。予定の日は軸の上の ‹ › で切り替えます。右上の ？ で使い方を開きます。
 
 ## 開発（Mac / Windows 共通）
 

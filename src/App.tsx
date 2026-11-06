@@ -54,6 +54,7 @@ export function App() {
   const now = useNow(60_000);
   const [place, setPlace] = useState<Place>(loadPlace);
   const helperDown = useHelperDown();
+  const help = useRef<HTMLDialogElement>(null);
   const [forecast, reloadForecast] = useRemote(
     forecastUrl(place.latitude, place.longitude),
     30 * 60_000,
@@ -175,10 +176,13 @@ export function App() {
   };
 
   const address = new URL(import.meta.env.BASE_URL, window.location.origin).href;
+  // 使い方の枠の上で結果を見せる（トーストは枠の裏に隠れる）
+  const [copied, setCopied] = useState<"" | "ok" | "ng">("");
   const copyAddress = () => {
-    navigator.clipboard?.writeText(address).then(
-      () => show({ text: "アドレスをコピーしました" }),
-      () => show({ text: "コピーできませんでした。アドレスを選んでコピーしてください" }),
+    if (!navigator.clipboard) return setCopied("ng");
+    navigator.clipboard.writeText(address).then(
+      () => setCopied("ok"),
+      () => setCopied("ng"),
     );
   };
 
@@ -230,6 +234,8 @@ export function App() {
     const onKey = (e: KeyboardEvent) => {
       if (e.isComposing || e.keyCode === 229) return;
       const key = e.key.toLowerCase();
+      // 使い方を開いている間は、裏の今やることを動かさない（元に戻すも含む）
+      if (help.current?.open) return;
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && key === "z") {
         if (isTyping(e.target) || !toast?.undo) return;
         e.preventDefault();
@@ -319,6 +325,15 @@ export function App() {
         >
           {theme === "dark" ? <SunIcon /> : <MoonIcon />}
         </button>
+        <button
+          type="button"
+          className="theme-toggle help-toggle"
+          onClick={() => help.current?.showModal()}
+          aria-label="使い方"
+          aria-haspopup="dialog"
+        >
+          <HelpIcon />
+        </button>
       </header>
 
       {helperDown && (
@@ -351,11 +366,27 @@ export function App() {
         </div>
       </main>
 
-      <footer className="footer">
-        <details className="help">
-          <summary className="help__summary">使い方</summary>
+      <dialog
+        ref={help}
+        className="help"
+        aria-labelledby="help-title"
+        onClose={() => setCopied("")}
+        onClick={(e) => {
+          // 枠の外（背景）を押したら閉じる。dialog 自体は余白を持たず、中身は help__inner が包む
+          if (e.target === e.currentTarget) e.currentTarget.close();
+        }}
+      >
+        <div className="help__inner">
+          <div className="help__top">
+            <h2 id="help-title" className="help__title">
+              使い方
+            </h2>
+            <button type="button" className="text-button" onClick={() => help.current?.close()}>
+              閉じる
+            </button>
+          </div>
           <div className="help__body">
-            <h2 className="help__heading">新しいタブに出すには</h2>
+            <h3 className="help__heading">新しいタブに出すには</h3>
             <ol className="help__steps">
               <li>Vivaldi の設定を開く</li>
               <li>「タブ」の設定にある新しいタブのページで「特定のページ」を選ぶ</li>
@@ -364,10 +395,11 @@ export function App() {
             <div className="help__address">
               <code>{address}</code>
               <button type="button" className="pill" onClick={copyAddress}>
-                コピー
+                {copied === "ok" ? "コピーしました" : "コピー"}
               </button>
             </div>
-            <h2 className="help__heading">予定・ニュース・使用量が出ないとき</h2>
+            {copied === "ng" && <p className="help__notes">コピーできませんでした。アドレスを選んでコピーしてください</p>}
+            <h3 className="help__heading">予定・ニュース・使用量が出ないとき</h3>
             <ul className="help__notes">
               <li>これらは PC で動いている係から届きます。PC を起動し直すと係も動き出します。</li>
               <li>
@@ -379,8 +411,8 @@ export function App() {
               <li>キー操作は画面を一度クリックすると効きます。</li>
             </ul>
           </div>
-        </details>
-      </footer>
+        </div>
+      </dialog>
 
       <div className="toast-region" aria-live="polite" aria-atomic="true">
         {toast && (
@@ -419,6 +451,22 @@ function MoonIcon() {
   return (
     <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
       <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
+function HelpIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true">
+      <circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M9.4 9.3a2.7 2.7 0 0 1 5.2 1c0 1.8-2.6 2.2-2.6 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="17.4" r="1.25" fill="currentColor" />
     </svg>
   );
 }

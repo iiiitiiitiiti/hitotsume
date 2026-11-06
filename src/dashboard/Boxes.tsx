@@ -5,10 +5,12 @@ import { savePlace, type Place } from "./settings";
 import { getJson, HELPER, isArrayOf, isObj, str, useRemote, type Remote } from "./useRemote";
 import {
   describeWeather,
+  formatDay,
   geocodeUrl,
   mergeHits,
   parseGeocode,
   placeQueries,
+  type Day,
   type Forecast,
   type PlaceHit,
   type Sky,
@@ -37,24 +39,30 @@ export function UsageBox() {
         Claude の使用量
       </h2>
       {usage.state === "ok" && usage.data.length > 0 ? (
-        <div className="gauges">
-          {usage.data.slice(0, 3).map((u) => (
-            <div key={u.label} className="gauge">
-              <div
-                className={`ring${u.percent >= 80 ? " ring--hot" : ""}`}
-                style={{ "--p": Math.min(100, Math.max(0, u.percent)) } as CSSProperties}
-                role="img"
-                aria-label={`${u.label} ${u.percent}%使用`}
-              >
-                <p aria-hidden="true">
+        <ul className="bars">
+          {usage.data.slice(0, 3).map((u, i) => {
+            const p = Math.min(100, Math.max(0, u.percent));
+            return (
+              <li key={u.label} className={`bar${p >= 80 ? " bar--hot" : ""}`} style={{ "--i": i } as CSSProperties}>
+                <p className="bar__head">
+                  <span className="bar__label">{u.label}</span>
                   <b className="num">{u.percent}%</b>
-                  <small>{u.label}</small>
                 </p>
-              </div>
-              <p className="gauge__reset">{formatReset(u.resetsAt, Date.now())}</p>
-            </div>
-          ))}
-        </div>
+                <div
+                  className="bar__track"
+                  role="meter"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={p}
+                  aria-label={`${u.label}の使用量`}
+                >
+                  <span className="bar__fill" style={{ "--p": p } as CSSProperties} />
+                </div>
+                <p className="bar__reset">{formatReset(u.resetsAt, Date.now())}</p>
+              </li>
+            );
+          })}
+        </ul>
       ) : usage.state === "error" ? (
         <HelperTrouble reason={usage.reason} onRetry={reload} />
       ) : (
@@ -66,7 +74,7 @@ export function UsageBox() {
 
 export function SkyIcon({ sky }: { sky: Sky }) {
   const sun = (
-    <g>
+    <g className="sky__sun">
       <circle cx="24" cy="24" r="9" fill="var(--c3)" />
       <g stroke="var(--c3)" strokeWidth="3" strokeLinecap="round">
         <path d="M24 5v5M24 38v5M5 24h5M38 24h5M10.6 10.6l3.5 3.5M33.9 33.9l3.5 3.5M10.6 37.4l3.5-3.5M33.9 14.1l3.5-3.5" />
@@ -74,11 +82,9 @@ export function SkyIcon({ sky }: { sky: Sky }) {
     </g>
   );
   const cloud = (x = 0, y = 0) => (
-    <path
-      transform={`translate(${x} ${y})`}
-      d="M14 36h20a8 8 0 0 0 0-16 11 11 0 0 0-21-2 9 9 0 0 0 1 18Z"
-      fill="var(--sky-cloud)"
-    />
+    <g transform={`translate(${x} ${y})`}>
+      <path className="sky__cloud" d="M14 36h20a8 8 0 0 0 0-16 11 11 0 0 0-21-2 9 9 0 0 0 1 18Z" fill="var(--sky-cloud)" />
+    </g>
   );
   return (
     <svg className="sky" viewBox="0 0 48 48" aria-hidden="true">
@@ -95,16 +101,20 @@ export function SkyIcon({ sky }: { sky: Sky }) {
         <>
           {cloud(0, -4)}
           {sky === "rain" ? (
-            <path d="M16 38l-2 6M25 38l-2 6M34 38l-2 6" stroke="var(--c1)" strokeWidth="3" strokeLinecap="round" />
+            <g className="sky__rain" stroke="var(--c1)" strokeWidth="3" strokeLinecap="round">
+              <path d="M16 38l-2 6" />
+              <path d="M25 38l-2 6" />
+              <path d="M34 38l-2 6" />
+            </g>
           ) : (
-            <path d="M26 34l-6 8h6l-4 6" fill="none" stroke="var(--c3)" strokeWidth="3" strokeLinejoin="round" />
+            <path className="sky__bolt" d="M26 34l-6 8h6l-4 6" fill="none" stroke="var(--c3)" strokeWidth="3" strokeLinejoin="round" />
           )}
         </>
       )}
       {sky === "snow" && (
         <>
           {cloud(0, -4)}
-          <g fill="var(--c1)">
+          <g className="sky__rain" fill="var(--c1)">
             <circle cx="16" cy="41" r="2.4" />
             <circle cx="25" cy="44" r="2.4" />
             <circle cx="34" cy="41" r="2.4" />
@@ -161,26 +171,37 @@ export function WeatherBox({
 }
 
 function WeatherView({ f }: { f: Forecast }) {
-  const today = describeWeather(f.today.code);
-  const tomorrow = f.tomorrow && describeWeather(f.tomorrow.code);
   return (
-    <div className="wx">
-      <SkyIcon sky={today.sky} />
+    <>
+      <div className="wx">
+        <WeatherDay label="今日" day={f.today} now={f.now} />
+        {f.tomorrow && <WeatherDay label="明日" day={f.tomorrow} />}
+      </div>
+      <p className="wx__source">
+        予報:{" "}
+        <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">
+          Open-Meteo
+        </a>
+      </p>
+    </>
+  );
+}
+
+function WeatherDay({ label, day, now }: { label: string; day: Day; now?: number }) {
+  const w = describeWeather(day.code);
+  return (
+    <div className="wx__day">
+      <p className="wx__when">
+        <b>{label}</b> {formatDay(day.date)}
+      </p>
+      <SkyIcon sky={w.sky} />
       <p className="wx__temp num">
-        {f.today.max}°<small>{f.today.min}°</small>
+        {day.max}°<small>{day.min}°</small>
       </p>
       <p className="wx__text">
-        {today.text}
-        <span className="wx__now">今 {f.now}°</span>
+        {w.text}
+        {now !== undefined && <span className="wx__now">今 {now}°</span>}
       </p>
-      {f.tomorrow && tomorrow && (
-        <p className="wx__tomorrow">
-          明日 {tomorrow.text}
-          <span className="num wx__range">
-            {f.tomorrow.max}° / {f.tomorrow.min}°
-          </span>
-        </p>
-      )}
     </div>
   );
 }

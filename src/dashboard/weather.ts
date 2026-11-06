@@ -16,9 +16,12 @@ export function describeWeather(code: number): { text: string; sky: Sky } {
 
 export type Forecast = {
   now: number;
-  today: { code: number; max: number; min: number };
-  tomorrow: { code: number; max: number; min: number } | null;
+  today: Day;
+  tomorrow: Day | null;
 };
+
+/** date はその地点の暦日（YYYY-MM-DD）。読めなければ空 */
+export type Day = { date: string; code: number; max: number; min: number };
 
 export function forecastUrl(latitude: number, longitude: number): string {
   const q = new URLSearchParams({
@@ -38,19 +41,31 @@ export function parseForecast(raw: unknown): Forecast | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as {
     current?: { temperature_2m?: unknown };
-    daily?: { weather_code?: unknown[]; temperature_2m_max?: unknown[]; temperature_2m_min?: unknown[] };
+    daily?: { time?: unknown[]; weather_code?: unknown[]; temperature_2m_max?: unknown[]; temperature_2m_min?: unknown[] };
   };
   const d = r.daily;
-  const day = (i: number) => {
+  const day = (i: number): Day | null => {
     const code = d?.weather_code?.[i];
     const max = d?.temperature_2m_max?.[i];
     const min = d?.temperature_2m_min?.[i];
-    return num(code) && num(max) && num(min) ? { code, max: Math.round(max), min: Math.round(min) } : null;
+    const time = d?.time?.[i];
+    const date = typeof time === "string" && /^\d{4}-\d{2}-\d{2}$/.test(time) ? time : "";
+    return num(code) && num(max) && num(min) ? { date, code, max: Math.round(max), min: Math.round(min) } : null;
   };
   const today = day(0);
   const now = r.current?.temperature_2m;
   if (!today || !num(now)) return null;
   return { now: Math.round(now), today, tomorrow: day(1) };
+}
+
+const WEEK = ["日", "月", "火", "水", "木", "金", "土"];
+
+/** 「11月6日（金）」。曜日は暦日から求める（地点の時差に左右されない） */
+export function formatDay(date: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  if (!m) return "";
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return `${d.getUTCMonth() + 1}月${d.getUTCDate()}日（${WEEK[d.getUTCDay()]}）`;
 }
 
 export type PlaceHit = { name: string; area: string; latitude: number; longitude: number };

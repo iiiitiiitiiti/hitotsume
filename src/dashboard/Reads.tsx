@@ -9,7 +9,23 @@ const newsList = isArrayOf(isNews);
 const parseNews = (raw: unknown) =>
   isObj(raw) ? { highlights: newsList(raw.highlights) ?? [], more: newsList(raw.more) ?? [] } : null;
 const parseSeeds = isArrayOf((v: unknown): v is Seed => isObj(v) && str(v.name) && str(v.fact));
-const parseNotes = isArrayOf((v: unknown): v is NoteItem => isObj(v) && str(v.title) && str(v.url));
+const noteList = isArrayOf((v: unknown): v is NoteItem => isObj(v) && str(v.title) && str(v.url));
+const parseNotes = (raw: unknown) => {
+  // 古い係は記事の配列だけを返す（新着順）
+  if (Array.isArray(raw)) {
+    const items = noteList(raw);
+    return items && { popular: false, items };
+  }
+  if (!isObj(raw)) return null;
+  const items = noteList(raw.items);
+  return items && { popular: raw.order === "hot", items };
+};
+
+/** 別のページは別窓で開く */
+const OUT = { target: "_blank", rel: "noopener noreferrer" } as const;
+
+/** サムネは画面の大きさに合う幅で取る（元の画像は 1280px ある） */
+const thumb = (url: string) => (url.includes("?") ? url : `${url}?width=240`);
 
 const TODAY = () => new Date().toLocaleDateString("sv-SE");
 
@@ -53,10 +69,11 @@ export function TechNews() {
         <>
           <DateNote date={news.date} />
           <ol className={`read__list${open ? " read__list--open" : ""}`}>
-            {[...news.data.highlights, ...(open ? more : [])].map((n) => (
-              <li key={n.url}>
-                <a href={n.url} title={n.summary}>
-                  {n.title}
+            {[...news.data.highlights, ...(open ? more : [])].map((n, i) => (
+              <li key={n.url} style={{ "--i": i } as CSSProperties}>
+                <a href={n.url} {...OUT}>
+                  <span className="read__title">{n.title}</span>
+                  {n.summary && <span className="read__summary">{n.summary}</span>}
                   <small>{n.source}</small>
                 </a>
               </li>
@@ -91,17 +108,17 @@ export function Seeds() {
       }
     >
       {seeds.state === "ok" && seed ? (
-        <>
+        <div key={index} className="read__swap">
           <DateNote date={seeds.date} />
           <p className="read__name">{seed.name}</p>
           <p className="read__genre">{seed.genre}</p>
           <p className="read__body">{seed.fact}</p>
           {seed.sourceUrl && (
-            <a className="read__source" href={seed.sourceUrl}>
+            <a className="read__source" href={seed.sourceUrl} {...OUT}>
               {seed.sourceLabel}
             </a>
           )}
-        </>
+        </div>
       ) : seeds.state === "error" ? (
         <HelperTrouble reason={seeds.reason} onRetry={reload} messages={{ no_file: "まだ届いていません" }} />
       ) : seeds.state === "ok" ? (
@@ -164,12 +181,12 @@ export function Wikipedia() {
       }
     >
       {state === "ok" && article ? (
-        <>
-          <a className="read__name" href={article.url}>
+        <div key={article.url} className="read__swap">
+          <a className="read__name" href={article.url} {...OUT}>
             {article.title}
           </a>
           <p className="read__body">{article.extract}</p>
-        </>
+        </div>
       ) : state === "error" ? (
         <p className="box__quiet">記事を取れませんでした</p>
       ) : (
@@ -197,7 +214,7 @@ export function Note() {
   return (
     <Read
       id="note-heading"
-      title={`note #${tag}`}
+      title={notes.state === "ok" && !notes.data.popular ? `note #${tag} の新着` : `note #${tag} の人気`}
       tone="--c2"
       action={
         <button
@@ -236,13 +253,20 @@ export function Note() {
         </form>
       )}
       {notes.state === "ok" ? (
-        notes.data.length > 0 ? (
+        notes.data.items.length > 0 ? (
           <ul className="read__list">
-            {notes.data.slice(0, 3).map((n) => (
-              <li key={n.url}>
-                <a href={n.url}>
-                  {n.title}
-                  {n.author && <small>{n.author}</small>}
+            {notes.data.items.slice(0, 3).map((n, i) => (
+              <li key={n.url} style={{ "--i": i } as CSSProperties}>
+                <a className="note-card" href={n.url} {...OUT}>
+                  {n.image ? (
+                    <img className="note-card__thumb" src={thumb(n.image)} alt="" loading="lazy" decoding="async" />
+                  ) : (
+                    <span className="note-card__thumb note-card__thumb--none" aria-hidden="true" />
+                  )}
+                  <span>
+                    <span className="read__title">{n.title}</span>
+                    {n.author && <small>{n.author}</small>}
+                  </span>
                 </a>
               </li>
             ))}

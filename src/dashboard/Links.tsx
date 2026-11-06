@@ -2,17 +2,29 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { cleanText, newId } from "../store";
 import { loadLinks, LINKS_KEY, MAX_LINKS, normalizeUrl, saveLinks, type Link } from "./settings";
 
+/**
+ * サイト自身のファビコン（/favicon.ico、無ければ /apple-touch-icon.png）を出す。
+ * どちらも無ければ名前の頭文字にする。どれも同じ大きさの枠に収める
+ */
 function Favicon({ url, name }: { url: string; name: string }) {
-  const [broken, setBroken] = useState(false);
-  const host = new URL(url).hostname;
-  if (broken) return <span className="link__initial">{Array.from(name)[0]?.toUpperCase() ?? "?"}</span>;
+  const [stage, setStage] = useState(0);
+  const { origin } = new URL(url);
+  const sources = [`${origin}/favicon.ico`, `${origin}/apple-touch-icon.png`];
+  if (stage >= sources.length) {
+    return <span className="link__icon link__initial">{Array.from(name)[0]?.toUpperCase() ?? "?"}</span>;
+  }
   return (
     <img
-      src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=64`}
+      className="link__icon"
+      src={sources[stage]}
       alt=""
-      width={18}
-      height={18}
-      onError={() => setBroken(true)}
+      width={20}
+      height={20}
+      onLoad={(e) => {
+        // 1px の透明画像などを返すサイトは、無いものとして次へ
+        if (e.currentTarget.naturalWidth < 8) setStage((n) => n + 1);
+      }}
+      onError={() => setStage((n) => n + 1)}
     />
   );
 }
@@ -67,7 +79,7 @@ export function Links() {
         <ul className="links__list">
           {links.map((l) => (
             <li key={l.id}>
-              <a className="link" href={l.url} title={l.name}>
+              <a className="link" href={l.url} title={l.name} target="_blank" rel="noopener noreferrer">
                 <Favicon url={l.url} name={l.name} />
                 <span className="visually-hidden">{l.name}</span>
               </a>

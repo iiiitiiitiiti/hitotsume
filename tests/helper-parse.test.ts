@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "../helper/parse";
+import { checkDay, parseNoteApi, parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "../helper/parse";
 
 describe("pickDailyFile", () => {
   it("今日の分があればそれ、同日の再実行は番号の大きい方", () => {
@@ -83,12 +83,41 @@ describe("parseNoteRss", () => {
   </channel></rss>`;
   it("記事を取り出し、note 以外のリンクは捨てる", () => {
     expect(parseNoteRss(xml)).toEqual([
-      { title: "A & B の話", url: "https://note.com/a/n/1", author: "加藤" },
-      { title: "C <D>", url: "https://note.com/b/n/2", author: "佐藤" },
+      { title: "A & B の話", url: "https://note.com/a/n/1", author: "加藤", image: "" },
+      { title: "C <D>", url: "https://note.com/b/n/2", author: "佐藤", image: "" },
     ]);
   });
   it("件数を絞れる", () => {
     expect(parseNoteRss(xml, 1)).toHaveLength(1);
+  });
+  it("サムネは note の画像置き場のものだけ通す", () => {
+    const withThumb = `<item><title>T</title><link>https://note.com/a/n/1</link><media:thumbnail>https://assets.st-note.com/x.png?width=800</media:thumbnail></item>
+      <item><title>U</title><link>https://note.com/a/n/2</link><media:thumbnail>https://evil.example/x.png</media:thumbnail></item>`;
+    expect(parseNoteRss(withThumb).map((n) => n.image)).toEqual(["https://assets.st-note.com/x.png?width=800", ""]);
+  });
+});
+
+describe("parseNoteApi", () => {
+  const raw = {
+    data: {
+      notes: [
+        { name: " 人気の記事 ", key: "n1f485eb3a258", eyecatch_url: "https://assets.st-note.com/a.png", user: { urlname: "huge_coot", nickname: "鳥" } },
+        { name: "画像なし", key: "n2", eyecatch_url: null, user: { urlname: "b" } },
+        { name: "鍵が変", key: "../x", user: { urlname: "c" } },
+        { name: "名前が変", key: "n3", user: { urlname: "a/b" } },
+        { name: "", key: "n4", user: { urlname: "d" } },
+      ],
+    },
+  };
+  it("記事の URL を組み立て、怪しい鍵や名前は捨てる", () => {
+    expect(parseNoteApi(raw)).toEqual([
+      { title: "人気の記事", url: "https://note.com/huge_coot/n/n1f485eb3a258", author: "鳥", image: "https://assets.st-note.com/a.png" },
+      { title: "画像なし", url: "https://note.com/b/n/n2", author: "", image: "" },
+    ]);
+  });
+  it("形が違えば空", () => {
+    expect(parseNoteApi(null)).toEqual([]);
+    expect(parseNoteApi({ data: {} })).toEqual([]);
   });
 });
 
@@ -136,5 +165,15 @@ describe("toEvents", () => {
     expect(ev.map((e) => e.subject)).toEqual(["（件名なし）", "B"]);
     expect(toEvents(raw[0])).toHaveLength(1);
     expect(toEvents(null)).toEqual([]);
+  });
+});
+
+describe("checkDay", () => {
+  it("暦にある日で、前後400日以内だけ通す", () => {
+    expect(checkDay("2026-11-07", "2026-11-06")).toBe(true);
+    expect(checkDay("2026-02-30", "2026-11-06")).toBe(false);
+    expect(checkDay("2026-11-6", "2026-11-06")).toBe(false);
+    expect(checkDay("2029-01-01", "2026-11-06")).toBe(false);
+    expect(checkDay("-Command x", "2026-11-06")).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { cleanTag, normalizeUrl, parseLinks, parsePlace, DEFAULT_PLACE } from "../src/dashboard/settings";
-import { describeWeather, mergeHits, parseForecast, parseGeocode, placeQueries } from "../src/dashboard/weather";
+import { describeWeather, formatDay, mergeHits, parseForecast, parseGeocode, placeQueries } from "../src/dashboard/weather";
 
 describe("normalizeUrl", () => {
   it("http・https だけを通し、書き忘れた https を補う", () => {
@@ -42,10 +42,19 @@ describe("天気", () => {
   it("予報を読み、欠けていれば null", () => {
     const raw = {
       current: { temperature_2m: 20.6 },
-      daily: { weather_code: [3, 0], temperature_2m_max: [24.4, 19], temperature_2m_min: [13.5, 10] },
+      daily: { time: ["2026-11-06", "bad"], weather_code: [3, 0], temperature_2m_max: [24.4, 19], temperature_2m_min: [13.5, 10] },
     };
-    expect(parseForecast(raw)).toEqual({ now: 21, today: { code: 3, max: 24, min: 14 }, tomorrow: { code: 0, max: 19, min: 10 } });
+    expect(parseForecast(raw)).toEqual({
+      now: 21,
+      today: { date: "2026-11-06", code: 3, max: 24, min: 14 },
+      tomorrow: { date: "", code: 0, max: 19, min: 10 },
+    });
     expect(parseForecast({ current: {}, daily: raw.daily })).toBeNull();
+  });
+  it("日付に曜日を添える", () => {
+    expect(formatDay("2026-11-06")).toBe("11月6日（金）");
+    expect(formatDay("2026-11-08")).toBe("11月8日（日）");
+    expect(formatDay("")).toBe("");
   });
   it("地名は市・都などを付けた名前でも探し、同じ場所はまとめる", () => {
     expect(placeQueries("札幌")).toEqual(["札幌市", "札幌都", "札幌府", "札幌県", "札幌区", "札幌"]);

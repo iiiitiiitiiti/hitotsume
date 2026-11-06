@@ -7,10 +7,11 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "./parse.ts";
+import { checkDay, parseNoteApi, parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "./parse.ts";
 
 export const PORT = 47615;
-const VERSION = "1";
+// 2: note を {order, items} で返す・/calendar に date を足した
+const VERSION = "2";
 // 手元の開発ページは HITOTSUME_DEV=1 のときだけ許す。ふだんは別プロジェクトの開発ページから読まれないようにする
 const ALLOWED_ORIGINS = new Set([
   "https://iiiitiiitiiti.github.io",
@@ -47,11 +48,19 @@ function localDate(d = new Date()): string {
   return d.toLocaleDateString("sv-SE"); // YYYY-MM-DD（この PC の時刻で）
 }
 
-function runOutlook(): Promise<Result> {
+/** Outlook の読み取りは1本ずつ流す。日を続けて送られても PowerShell を同時に何本も起こさない */
+let outlookQueue: Promise<unknown> = Promise.resolve();
+function runOutlook(date: string): Promise<Result> {
+  const run = outlookQueue.then(() => readOutlook(date));
+  outlookQueue = run;
+  return run;
+}
+
+function readOutlook(date: string): Promise<Result> {
   return new Promise((resolve) => {
     execFile(
       "powershell.exe",
-      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", OUTLOOK_SCRIPT],
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", OUTLOOK_SCRIPT, "-Date", date],
       { timeout: 20_000, windowsHide: true, encoding: "utf8", maxBuffer: 1024 * 1024 },
       (err, stdout) => {
         if (err) return resolve({ ok: false, reason: "read_failed" });
@@ -59,7 +68,7 @@ function runOutlook(): Promise<Result> {
           const raw: unknown = JSON.parse(stdout.replace(/^\uFEFF/, "").trim() || "[]");
           if (raw && typeof raw === "object" && !Array.isArray(raw) && "error" in raw)
             return resolve({ ok: false, reason: String((raw as { error: unknown }).error) });
-          resolve({ ok: true, data: toEvents(raw), date: localDate() });
+          resolve({ ok: true, data: toEvents(raw), date });
         } catch {
           resolve({ ok: false, reason: "read_failed" });
         }
@@ -92,13 +101,22 @@ async function loadSeeds(): Promise<Result> {
   return { ok: true, data: parseSeeds(f.text), date: f.date };
 }
 
+/** タグの人気記事。人気順の窓口（非公式）が使えなければ、公式の RSS の新着に切り替える */
 async function loadNote(tagName: string): Promise<Result> {
-  const res = await fetch(`https://note.com/hashtag/${encodeURIComponent(tagName)}/rss`, {
-    headers: { "User-Agent": "hitotsume-helper/1" },
-    signal: AbortSignal.timeout(10_000),
-  });
+  const t = encodeURIComponent(tagName);
+  const init = () => ({ headers: { "User-Agent": "hitotsume-helper/1" }, signal: AbortSignal.timeout(10_000) });
+  try {
+    const res = await fetch(`https://note.com/api/v3/hashtags/${t}/notes?order=hot&page=1`, init());
+    if (res.ok) {
+      const items = parseNoteApi(await res.json(), 5);
+      if (items.length > 0) return { ok: true, data: { order: "hot", items } };
+    }
+  } catch {
+    // RSS へ
+  }
+  const res = await fetch(`https://note.com/hashtag/${t}/rss`, init());
   if (!res.ok) return { ok: false, reason: "fetch_failed" };
-  return { ok: true, data: parseNoteRss(await res.text(), 5) };
+  return { ok: true, data: { order: "new", items: parseNoteRss(await res.text(), 5) } };
 }
 
 /** Claude の使用量。この PC に保存済みのログインを読むだけで、書き換え・期限の延長はしない */
@@ -132,8 +150,11 @@ async function route(url: URL): Promise<{ status: number; body: Result | { ok: t
   switch (url.pathname) {
     case "/version":
       return { status: 200, body: { ok: true, version: VERSION } };
-    case "/calendar":
-      return { status: 200, body: await cached(`calendar:${localDate()}`, 5 * MIN, runOutlook) };
+    case "/calendar": {
+      const day = url.searchParams.get("date") ?? localDate();
+      if (!checkDay(day, localDate())) return { status: 400, body: { ok: false, reason: "bad_date" } };
+      return { status: 200, body: await cached(`calendar:${day}`, 5 * MIN, () => runOutlook(day)) };
+    }
     case "/technews":
       return { status: 200, body: await cached("technews", 10 * MIN, loadTechNews) };
     case "/seeds":

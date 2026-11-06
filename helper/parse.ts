@@ -2,7 +2,7 @@
 
 export type NewsItem = { title: string; summary: string; source: string; url: string };
 export type Seed = { name: string; genre: string; fact: string; sourceLabel: string; sourceUrl: string };
-export type NoteItem = { title: string; url: string; author: string };
+export type NoteItem = { title: string; url: string; author: string; image: string };
 export type UsageWindow = { label: string; percent: number; resetsAt: string | null };
 export type CalendarEvent = {
   subject: string;
@@ -116,14 +116,42 @@ function tag(block: string, name: string): string {
   return m ? decodeXml(m[1]) : "";
 }
 
-/** note のタグ RSS から記事を取り出す */
+/** サムネは note の画像置き場のものだけ通す。ほかの場所の画像を記事の絵として出さないため */
+function noteImage(url: unknown): string {
+  return typeof url === "string" && /^https:\/\/assets\.st-note\.com\//.test(url) ? url : "";
+}
+
+/** note のタグ RSS（新着順）から記事を取り出す。人気順が取れないときの控え */
 export function parseNoteRss(xml: string, limit = 5): NoteItem[] {
   const items: NoteItem[] = [];
   for (const m of xml.matchAll(/<item>([\s\S]*?)<\/item>/g)) {
     const url = tag(m[1], "link");
     const title = tag(m[1], "title");
     if (!title || !/^https:\/\/note\.com\//.test(url)) continue;
-    items.push({ title, url, author: tag(m[1], "note:creatorName") });
+    items.push({ title, url, author: tag(m[1], "note:creatorName"), image: noteImage(tag(m[1], "media:thumbnail")) });
+    if (items.length >= limit) break;
+  }
+  return items;
+}
+
+type RawNote = { name?: unknown; key?: unknown; eyecatch_url?: unknown; user?: { urlname?: unknown; nickname?: unknown } | null };
+
+/** note のタグの記事一覧（`/api/v3/hashtags/{タグ}/notes?order=hot`。タグページの「人気」に近い並び）を取り出す */
+export function parseNoteApi(raw: unknown, limit = 5): NoteItem[] {
+  const notes = (raw as { data?: { notes?: unknown } } | null)?.data?.notes;
+  if (!Array.isArray(notes)) return [];
+  const items: NoteItem[] = [];
+  for (const n of notes as RawNote[]) {
+    const user = n.user?.urlname;
+    if (typeof n.name !== "string" || !n.name.trim()) continue;
+    if (typeof n.key !== "string" || !/^n[0-9a-f]+$/.test(n.key)) continue;
+    if (typeof user !== "string" || !/^[A-Za-z0-9_-]+$/.test(user)) continue;
+    items.push({
+      title: n.name.trim(),
+      url: `https://note.com/${user}/n/${n.key}`,
+      author: typeof n.user?.nickname === "string" ? n.user.nickname : "",
+      image: noteImage(n.eyecatch_url),
+    });
     if (items.length >= limit) break;
   }
   return items;
@@ -186,4 +214,15 @@ export function toEvents(raw: unknown): CalendarEvent[] {
     });
   }
   return out.sort((a, b) => a.start.localeCompare(b.start));
+}
+
+/** 予定を読む日の指定を確かめる。暦にある日で、今日から前後 400 日以内だけ通す */
+export function checkDay(date: string, today: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+  const t = /^(\d{4})-(\d{2})-(\d{2})$/.exec(today);
+  if (!m || !t) return false;
+  const d = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  if (new Date(d).toISOString().slice(0, 10) !== date) return false;
+  const base = Date.UTC(Number(t[1]), Number(t[2]) - 1, Number(t[3]));
+  return Math.abs(d - base) <= 400 * 86_400_000;
 }

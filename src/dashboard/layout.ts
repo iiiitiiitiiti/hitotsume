@@ -33,9 +33,12 @@ export const MAX_LANES = 3;
 const NARROW_MS = 50 * 60_000;
 const LABEL_MS = 80 * 60_000;
 
-/** 今日の予定を、軸の上の位置に直す。軸は既定 9〜19 時で、はみ出す予定があれば広げる */
-export function layoutDay(events: CalendarEvent[], now: number): DayLayout {
-  const day0 = new Date(now);
+/**
+ * 1日分の予定を、軸の上の位置に直す。軸は既定 9〜19 時で、はみ出す予定があれば広げる。
+ * day はその日のどこかの時刻（省略すると今日）。済んだか・今かは now で決める
+ */
+export function layoutDay(events: CalendarEvent[], now: number, day = now): DayLayout {
+  const day0 = new Date(day);
   day0.setHours(0, 0, 0, 0);
   const dayStart = day0.getTime();
   const dayEnd = new Date(day0.getFullYear(), day0.getMonth(), day0.getDate() + 1).getTime();
