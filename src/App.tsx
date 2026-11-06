@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Celebration } from "./Celebration";
-import { Clock } from "./Clock";
+import { formatClock } from "./Clock";
+import { UsageBox, WeatherBox } from "./dashboard/Boxes";
+import { DayAxis } from "./dashboard/DayAxis";
+import { Links } from "./dashboard/Links";
+import { Note, Seeds, TechNews, Wikipedia } from "./dashboard/Reads";
+import { loadPlace, type Place } from "./dashboard/settings";
+import { retryHelper, useHelperDown, useRemote } from "./dashboard/useRemote";
+import { describeWeather, forecastUrl, parseForecast } from "./dashboard/weather";
 import { completeTask, countToday, editTask, nextStep, sameData, startTask, undoTo, type UndoEntry } from "./model";
 import {
   loadData,
@@ -23,7 +30,7 @@ const storage = localStore();
 const NEXT_BUTTON = "button-next";
 const EDIT_BUTTON = "button-edit";
 const TOAST_MS = 8000;
-const THEME_COLOR: Record<Theme, string> = { light: "#FAF8F3", dark: "#121212" };
+const THEME_COLOR: Record<Theme, string> = { light: "#EEF0F2", dark: "#11161B" };
 
 type Toast = { id: number; text: string; undo?: UndoEntry };
 
@@ -44,7 +51,15 @@ export function App() {
   const [celebration, setCelebration] = useState(0);
   const [theme, setTheme] = useState<Theme>(() => loadTheme(storage));
   // 日付が変わったら「今日済んだこと」を数え直すため、毎分描き直す
-  useNow(60_000);
+  const now = useNow(60_000);
+  const [place, setPlace] = useState<Place>(loadPlace);
+  const helperDown = useHelperDown();
+  const [forecast, reloadForecast] = useRemote(
+    forecastUrl(place.latitude, place.longitude),
+    30 * 60_000,
+    parseForecast,
+    false,
+  );
 
   const current = data.current;
   const mode: Draft["mode"] | "view" = !current
@@ -232,12 +247,70 @@ export function App() {
   });
 
   const endCelebration = useCallback(() => setCelebration(0), []);
-  const today = countToday(data.done, Date.now());
+  const today = countToday(data.done, now);
+
+  const { date } = formatClock(now);
+  const sky = forecast.state === "ok" ? describeWeather(forecast.data.today.code).text : "";
+
+  const taskBox =
+    mode === "view" && current ? (
+      <section className="box task" aria-labelledby="task-heading">
+        <h2 id="task-heading" className="box__heading">
+          今やること
+        </h2>
+        <p className="task__title">{current.title}</p>
+        <p key={current.firstStep} className="task__step">
+          {current.firstStep}
+        </p>
+        <div className="task__foot">
+          <button id={NEXT_BUTTON} type="button" className="pill pill--go" onClick={openNext} aria-keyshortcuts="N">
+            一手済んだ <kbd>N</kbd>
+          </button>
+          <button type="button" className="pill" onClick={complete} aria-keyshortcuts="D">
+            全部済んだ <kbd>D</kbd>
+          </button>
+          <button id={EDIT_BUTTON} type="button" className="pill" onClick={openEdit} aria-keyshortcuts="E">
+            書き直す <kbd>E</kbd>
+          </button>
+          <Tally today={today} />
+        </div>
+      </section>
+    ) : (
+      <section className="box task" aria-labelledby="task-heading">
+        <h2 id="task-heading" className="box__heading">
+          今やること
+        </h2>
+        {mode === "next" && current && <p className="task__title">{current.title}</p>}
+        <TaskForm
+          key={mode}
+          mode={mode === "view" ? "start" : mode}
+          title={formTitle}
+          firstStep={formStep}
+          onChange={change}
+          onSubmit={mode === "next" ? submitNext : mode === "edit" ? submitEdit : submitStart}
+          onCancel={mode === "start" ? undefined : cancel}
+        />
+        {mode === "start" && (
+          <div className="task__foot">
+            <Tally today={today} />
+          </div>
+        )}
+      </section>
+    );
 
   return (
     <div className="app">
-      <header className="topbar">
-        <Clock />
+      <header className="top">
+        <h1 className="visually-hidden">ひとつめ</h1>
+        <p className="top__date">
+          {date}
+          {sky && (
+            <span>
+              {place.name} {sky}
+            </span>
+          )}
+        </p>
+        <Links />
         <button
           type="button"
           className="theme-toggle"
@@ -248,61 +321,41 @@ export function App() {
         </button>
       </header>
 
+      {helperDown && (
+        <p className="notice notice--helper">
+          <span>PC の係につながりません。予定・ニュース・作問の種・note・使用量は、係が動いていると出ます。</span>
+          <button type="button" className="text-button" onClick={retryHelper}>
+            つなぎ直す
+          </button>
+        </p>
+      )}
+
       {!storage && (
         <p className="notice">このブラウザでは書いた内容を残せません。タブを閉じると消えます。</p>
       )}
 
       <main className="main">
-        {mode === "view" && current ? (
-          <section className="focus" aria-labelledby="focus-step">
-            <p className="focus__eyebrow">今やること</p>
-            <p className="focus__title">{current.title}</p>
-            <h1 className="focus__label" id="focus-step">
-              まずこれだけ
-            </h1>
-            <p key={current.firstStep} className="focus__step">
-              {current.firstStep}
-            </p>
-            <div className="focus__actions">
-              <button id={NEXT_BUTTON} type="button" className="button button--primary" onClick={openNext} aria-keyshortcuts="N">
-                一手済んだ <kbd>N</kbd>
-              </button>
-              <button type="button" className="button button--done" onClick={complete} aria-keyshortcuts="D">
-                全部済んだ <kbd>D</kbd>
-              </button>
-              <button id={EDIT_BUTTON} type="button" className="button button--ghost" onClick={openEdit} aria-keyshortcuts="E">
-                書き直す <kbd>E</kbd>
-              </button>
-            </div>
-          </section>
-        ) : (
-          <>
-            {mode === "next" && current && (
-              <div className="context">
-                <p className="focus__eyebrow">今やること</p>
-                <p className="context__title">{current.title}</p>
-              </div>
-            )}
-            <TaskForm
-              key={mode}
-              mode={mode === "view" ? "start" : mode}
-              title={formTitle}
-              firstStep={formStep}
-              onChange={change}
-              onSubmit={mode === "next" ? submitNext : mode === "edit" ? submitEdit : submitStart}
-              onCancel={mode === "start" ? undefined : cancel}
-            />
-          </>
-        )}
+        <DayAxis />
+
+        <div className="row">
+          {taskBox}
+          <UsageBox />
+          <WeatherBox place={place} forecast={forecast} onRetry={reloadForecast} onPlace={setPlace} />
+        </div>
+
+        <div className="reads">
+          <TechNews />
+          <Seeds />
+          <Wikipedia />
+          <Note />
+        </div>
       </main>
 
       <footer className="footer">
-        <p className="footer__count">
-          今日済んだこと <strong className="footer__number">{today}</strong> 件
-        </p>
         <details className="help">
-          <summary className="help__summary">新しいタブに出すには</summary>
+          <summary className="help__summary">使い方</summary>
           <div className="help__body">
+            <h2 className="help__heading">新しいタブに出すには</h2>
             <ol className="help__steps">
               <li>Vivaldi の設定を開く</li>
               <li>「タブ」の設定にある新しいタブのページで「特定のページ」を選ぶ</li>
@@ -310,12 +363,19 @@ export function App() {
             </ol>
             <div className="help__address">
               <code>{address}</code>
-              <button type="button" className="button button--small" onClick={copyAddress}>
+              <button type="button" className="pill" onClick={copyAddress}>
                 コピー
               </button>
             </div>
+            <h2 className="help__heading">予定・ニュース・使用量が出ないとき</h2>
             <ul className="help__notes">
-              <li>書いた内容はこの端末のブラウザにだけ保存されます。別の端末には引き継がれません。</li>
+              <li>これらは PC で動いている係から届きます。PC を起動し直すと係も動き出します。</li>
+              <li>
+                Vivaldi に、このページがローカル ネットワーク（この PC の中）へつなぐのを許可するか聞かれたら、許可を押してください。断ったときは、アドレスバー左のサイト情報から許可に戻せます。
+              </li>
+            </ul>
+            <ul className="help__notes">
+              <li>書いた内容とリンクはこの端末のブラウザにだけ保存されます。別の端末には引き継がれません。</li>
               <li>キー操作は画面を一度クリックすると効きます。</li>
             </ul>
           </div>
@@ -344,6 +404,14 @@ export function App() {
 
       {celebration > 0 && <Celebration key={celebration} onDone={endCelebration} />}
     </div>
+  );
+}
+
+function Tally({ today }: { today: number }) {
+  return (
+    <p className="tally">
+      今日済んだこと <b className="num">{today}</b>
+    </p>
   );
 }
 

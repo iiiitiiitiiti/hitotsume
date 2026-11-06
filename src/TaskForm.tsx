@@ -56,7 +56,7 @@ export function TaskForm({ mode, title, firstStep, onChange, onSubmit, onCancel 
 
   return (
     <form className={`task-form task-form--${mode}`} onSubmit={submit} onKeyDown={onFormKey} noValidate>
-      <h1 className="task-form__heading">{copy.heading}</h1>
+      <h3 className="task-form__heading">{copy.heading}</h3>
 
       {showTitle && (
         <div className="field">
@@ -118,11 +118,11 @@ export function TaskForm({ mode, title, firstStep, onChange, onSubmit, onCancel 
       </div>
 
       <div className="task-form__actions">
-        <button type="submit" className="button button--primary">
+        <button type="submit" className="pill pill--go">
           {copy.submit}
         </button>
         {onCancel && (
-          <button type="button" className="button button--ghost" onClick={onCancel} aria-keyshortcuts="Escape">
+          <button type="button" className="pill" onClick={onCancel} aria-keyshortcuts="Escape">
             やめる <kbd>Esc</kbd>
           </button>
         )}

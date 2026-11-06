@@ -1,4 +1,6 @@
-import "@fontsource-variable/noto-sans-jp";
+import "@fontsource/ibm-plex-sans-jp/400.css";
+import "@fontsource/ibm-plex-sans-jp/700.css";
+import "@fontsource/ibm-plex-sans-condensed/latin-600.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";

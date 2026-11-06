@@ -17,18 +17,18 @@ export default defineConfig({
         id: base,
         name: "ひとつめ",
         short_name: "ひとつめ",
-        description: "今やることを1つと、最初の一手だけを大きく出す新しいタブ",
+        description: "今やることと今日の予定・天気・読み物を1枚にまとめた新しいタブ",
         lang: "ja",
         display: "standalone",
         start_url: base,
         scope: base,
-        theme_color: "#FAF8F3",
-        background_color: "#FAF8F3",
+        theme_color: "#EEF0F2",
+        background_color: "#EEF0F2",
         icons: [{ src: "icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
       },
       workbox: {
         navigateFallback: "index.html",
-        // 文字（Noto Sans JP の分割ファイル）も最初に全部取り込み、オフラインでも欠けないようにする
+        // 文字（IBM Plex Sans JP の分割ファイル）も最初に全部取り込み、オフラインでも欠けないようにする
         globPatterns: ["**/*.{js,css,html,svg,woff2}"],
       },
     }),
