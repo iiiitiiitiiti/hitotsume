@@ -62,7 +62,7 @@ erDiagram
 ## 更新・文字・テーマ
 
 - 新しい版は `registerType: "prompt"` で待たせ、タブが裏にあり書きかけが無いときだけ切り替えて再読み込みする。開いている全タブが一斉に再読み込みして書きかけが消えるのを防ぐ
-- 文字は `@fontsource/ibm-plex-sans-jp`（400・700）と数字用の `@fontsource/ibm-plex-sans-condensed`（latin 600）を自前で配信し、precache に入れる。オフラインでも欠けない。precache は約3.4MB
+- 文字は `@fontsource-variable/noto-sans-jp` を自前で配信し、precache に入れる。オフラインでも欠けない。見本は IBM Plex Sans JP だったが、自作アプリの書体は Noto Sans JP と決まっているので戻した（2026-11-06）
 - CSP の `connect-src` は自分・係（`http://127.0.0.1:47615`）・Open-Meteo（予報・地名検索）・ja.wikipedia.org だけ。`img-src` は favicon 用に www.google.com と *.gstatic.com を足した。React の style 指定は CSSOM 経由なので `style-src 'self'` のままで動く
 - `public/theme.js` を head で同期読み込みし、React 起動前に `<html data-theme>` を付ける。CSP がインラインスクリプトを禁じているので外部ファイルにした
 

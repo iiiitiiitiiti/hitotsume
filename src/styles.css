@@ -64,7 +64,7 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--ink);
-  font-family: "IBM Plex Sans JP", system-ui, sans-serif;
+  font-family: "Noto Sans JP Variable", "Noto Sans JP", system-ui, sans-serif;
   font-size: 1rem;
   line-height: 1.65;
   transition:
@@ -111,7 +111,6 @@ input {
 }
 
 .num {
-  font-family: "IBM Plex Sans Condensed", "IBM Plex Sans JP", sans-serif;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -132,7 +131,7 @@ kbd {
   padding: 0 0.35em;
   border: 1px solid currentColor;
   border-radius: 5px;
-  font-family: "IBM Plex Sans Condensed", sans-serif;
+  font-family: inherit;
   font-size: 0.72em;
   line-height: 1.45;
   text-align: center;

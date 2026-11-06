@@ -28,7 +28,7 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: "index.html",
-        // 文字（IBM Plex Sans JP の分割ファイル）も最初に全部取り込み、オフラインでも欠けないようにする
+        // 文字（Noto Sans JP の分割ファイル）も最初に全部取り込み、オフラインでも欠けないようにする
         globPatterns: ["**/*.{js,css,html,svg,woff2}"],
       },
     }),
