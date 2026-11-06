@@ -7,11 +7,11 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { checkDay, parseNoteApi, parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "./parse.ts";
+import { checkDay, isPublicUrl, parseNoteApi, pickIcon, parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "./parse.ts";
 
 export const PORT = 47615;
-// 2: note を {order, items} で返す・/calendar に date を足した
-const VERSION = "2";
+// 2: note を {order, items} で返す・/calendar に date を足した。3: /icon を足した
+const VERSION = "3";
 // 手元の開発ページは HITOTSUME_DEV=1 のときだけ許す。ふだんは別プロジェクトの開発ページから読まれないようにする
 const ALLOWED_ORIGINS = new Set([
   "https://iiiitiiitiiti.github.io",
@@ -144,6 +144,47 @@ async function loadUsage(): Promise<Result> {
   return { ok: true, data: windows };
 }
 
+const BROWSER_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0 Safari/537.36";
+
+/**
+ * よく見るサイトのアイコンを探す。見つけた画像の URL を返し、画面はそれを直接読む。
+ * 1. ページが指定するアイコン（Google マップのピンなど。サイト共通の favicon.ico とは違うことがある）
+ * 2. Google が控えているそのページのアイコン（Gmail のようにログイン画面へ飛ばされるページ用。
+ *    無いページには地球の絵を 404 つきで返すので、200 のときだけ使う）
+ * 3. サイト共通の /favicon.ico
+ */
+async function loadIcon(page: string): Promise<Result> {
+  const req = new URL(page);
+  const signal = () => AbortSignal.timeout(8_000);
+  try {
+    const res = await fetch(page, {
+      headers: { "User-Agent": BROWSER_UA, Accept: "text/html", "Accept-Language": "ja" },
+      signal: signal(),
+    });
+    // 別のホスト（ログイン画面など）へ飛ばされたら、そのページのアイコンは当てにしない
+    if (res.ok && new URL(res.url).hostname === req.hostname && (res.headers.get("content-type") ?? "").includes("html")) {
+      const icon = pickIcon((await res.text()).slice(0, 512_000), res.url);
+      if (icon) return { ok: true, data: { icon } };
+    }
+  } catch {
+    // 次の手へ
+  }
+  const google = `https://t3.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&size=64&url=${encodeURIComponent(page)}`;
+  try {
+    const res = await fetch(google, { signal: signal() });
+    if (res.status === 200) return { ok: true, data: { icon: google } };
+  } catch {
+    // 次の手へ
+  }
+  try {
+    const res = await fetch(`${req.origin}/favicon.ico`, { headers: { "User-Agent": BROWSER_UA }, signal: signal() });
+    if (res.ok && (res.headers.get("content-type") ?? "").startsWith("image/")) return { ok: true, data: { icon: res.url } };
+  } catch {
+    // 見つからない
+  }
+  return { ok: true, data: { icon: null } };
+}
+
 const MIN = 60_000;
 
 async function route(url: URL): Promise<{ status: number; body: Result | { ok: true; version: string } }> {
@@ -161,6 +202,11 @@ async function route(url: URL): Promise<{ status: number; body: Result | { ok: t
       return { status: 200, body: await cached("seeds", 10 * MIN, loadSeeds) };
     case "/usage":
       return { status: 200, body: await cached("usage", 5 * MIN, loadUsage) };
+    case "/icon": {
+      const page = url.searchParams.get("url") ?? "";
+      if (page.length > 2000 || !isPublicUrl(page)) return { status: 400, body: { ok: false, reason: "bad_url" } };
+      return { status: 200, body: await cached(`icon:${page}`, 24 * 60 * MIN, () => loadIcon(page)) };
+    }
     case "/note": {
       const t = (url.searchParams.get("tag") ?? "").trim().replace(/^#/, "");
       if (!t || t.length > 40 || /[/?#\\%]/.test(t)) return { status: 400, body: { ok: false, reason: "bad_tag" } };

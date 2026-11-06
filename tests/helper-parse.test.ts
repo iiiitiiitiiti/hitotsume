@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkDay, parseNoteApi, parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "../helper/parse";
+import { checkDay, isPublicUrl, parseNoteApi, pickIcon, parseNoteRss, parseSeeds, parseTechNews, parseTechNewsMore, pickDailyFile, toEvents, toUsage } from "../helper/parse";
 
 describe("pickDailyFile", () => {
   it("今日の分があればそれ、同日の再実行は番号の大きい方", () => {
@@ -175,5 +175,35 @@ describe("checkDay", () => {
     expect(checkDay("2026-11-6", "2026-11-06")).toBe(false);
     expect(checkDay("2029-01-01", "2026-11-06")).toBe(false);
     expect(checkDay("-Command x", "2026-11-06")).toBe(false);
+  });
+});
+
+describe("pickIcon", () => {
+  it("ページが指定するアイコンを選び、相対パスを解く", () => {
+    const maps = `<link href="//www.google.com/images/branding/product/ico/web_maps_icon_32dp.ico" rel="icon">`;
+    expect(pickIcon(maps, "https://www.google.com/maps")).toBe("https://www.google.com/images/branding/product/ico/web_maps_icon_32dp.ico");
+    expect(pickIcon(`<link rel='shortcut icon' href=/f.ico>`, "https://a.example/x/y")).toBe("https://a.example/f.ico");
+  });
+  it("SVG を先に、無ければ 32px 以上で一番小さいもの。mask-icon は使わない", () => {
+    const sized = `<link rel="icon" href="/256.png" sizes="256x256"/><link rel="icon" href="/128.png" sizes="128x128"/><link rel="icon" href="/16.png" sizes="16x16"/>`;
+    expect(pickIcon(sized, "https://f.example/")).toBe("https://f.example/128.png");
+    const figma = `${sized}<link rel="icon" href="/favicon.svg" sizes="any" type="image/svg+xml"/>`;
+    expect(pickIcon(figma, "https://f.example/")).toBe("https://f.example/favicon.svg");
+    const gh = `<link rel="mask-icon" href="/m.svg"><link rel="alternate icon" type="image/png" href="/f.png"><link rel="icon" type="image/svg+xml" href="/f.svg">`;
+    expect(pickIcon(gh, "https://g.example/")).toBe("https://g.example/f.svg");
+  });
+  it("icon が無ければ apple-touch-icon、何も無ければ null。javascript: は捨てる", () => {
+    expect(pickIcon(`<link rel="apple-touch-icon" href="/t.png">`, "https://t.example/")).toBe("https://t.example/t.png");
+    expect(pickIcon(`<link rel="icon" href="javascript:alert(1)">`, "https://t.example/")).toBeNull();
+    expect(pickIcon("<p>none</p>", "https://t.example/")).toBeNull();
+  });
+});
+
+describe("isPublicUrl", () => {
+  it("この PC や家の中のネットワークは通さない", () => {
+    expect(isPublicUrl("https://mail.google.com/mail/u/0/")).toBe(true);
+    for (const u of ["http://localhost:3000/", "http://127.0.0.1/", "http://192.168.1.1/", "http://10.0.0.2/", "http://[::1]/", "http://intranet/", "file:///C:/x", "nope"]) {
+      expect(isPublicUrl(u)).toBe(false);
+    }
   });
 });

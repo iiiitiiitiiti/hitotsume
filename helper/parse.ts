@@ -226,3 +226,54 @@ export function checkDay(date: string, today: string): boolean {
   const base = Date.UTC(Number(t[1]), Number(t[2]) - 1, Number(t[3]));
   return Math.abs(d - base) <= 400 * 86_400_000;
 }
+
+/**
+ * ページの HTML から、そのページが指定するアイコンを選ぶ。
+ * rel に icon を含む link（mask-icon・fluid-icon は除く）のうち、SVG（ブラウザのタブと同じ）、
+ * 無ければ 32px 以上で一番小さいもの、無ければ最初の icon、最後に apple-touch-icon。base は相対パスを解く基準の URL
+ */
+export function pickIcon(html: string, base: string): string | null {
+  type Cand = { href: string; size: number; svg: boolean; touch: boolean };
+  const cands: Cand[] = [];
+  for (const m of html.matchAll(/<link\b[^>]*>/gi)) {
+    const attrs = new Map<string, string>();
+    for (const a of m[0].matchAll(/([a-zA-Z-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) {
+      attrs.set(a[1].toLowerCase(), a[2] ?? a[3] ?? a[4] ?? "");
+    }
+    const rel = (attrs.get("rel") ?? "").toLowerCase().split(/\s+/);
+    const href = attrs.get("href");
+    if (!href) continue;
+    const touch = rel.includes("apple-touch-icon") || rel.includes("apple-touch-icon-precomposed");
+    if (!rel.includes("icon") && !touch) continue;
+    let url: URL;
+    try {
+      url = new URL(href, base);
+    } catch {
+      continue;
+    }
+    if (url.protocol !== "https:" && url.protocol !== "http:") continue;
+    const sizes = (attrs.get("sizes") ?? "").toLowerCase();
+    const size = Math.max(0, ...[...sizes.matchAll(/(\d+)x\d+/g)].map((s) => Number(s[1])));
+    const svg = (attrs.get("type") ?? "").includes("svg") || /\.svg(\?|$)/i.test(url.pathname) || sizes === "any";
+    cands.push({ href: url.href, size, svg, touch });
+  }
+  const icons = cands.filter((c) => !c.touch);
+  const sized = icons.filter((c) => c.size >= 32).sort((a, b) => a.size - b.size);
+  return icons.find((c) => c.svg)?.href ?? sized[0]?.href ?? icons[0]?.href ?? cands[0]?.href ?? null;
+}
+
+/** アイコンを探しに行ってよい URL か。http・https で、この PC や家の中のネットワークを指さないもの */
+export function isPublicUrl(raw: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(raw);
+  } catch {
+    return false;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") return false;
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || (!h.includes(".") && !h.includes(":"))) return false;
+  if (/^(127|10|0)\.|^192\.168\.|^169\.254\.|^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
+  if (h.includes(":")) return false; // IPv6 の生の番地は通さない
+  return true;
+}

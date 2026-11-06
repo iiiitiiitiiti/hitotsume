@@ -1,30 +1,84 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { cleanText, newId } from "../store";
+import { getJson, HELPER } from "./useRemote";
 import { loadLinks, LINKS_KEY, MAX_LINKS, normalizeUrl, saveLinks, type Link } from "./settings";
 
+const ICONS_KEY = "hitotsume:icons";
+const ICON_TTL = 7 * 24 * 60 * 60_000;
+type IconMemo = Record<string, { icon: string | null; at: number }>;
+
+function loadIcons(): IconMemo {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(ICONS_KEY) ?? "{}");
+    return v && typeof v === "object" ? (v as IconMemo) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveIcon(url: string, icon: string | null) {
+  try {
+    const memo = loadIcons();
+    memo[url] = { icon, at: Date.now() };
+    localStorage.setItem(ICONS_KEY, JSON.stringify(memo));
+  } catch {
+    // 残せなくても、次に開いたとき係へ聞き直すだけ
+  }
+}
+
+/** 係が探したアイコンの URL。null は「探したが無い」、undefined は「まだ分からない」 */
+function useIconUrl(url: string): string | null | undefined {
+  const [icon, setIcon] = useState<string | null | undefined>(() => loadIcons()[url]?.icon);
+  useEffect(() => {
+    const hit = loadIcons()[url];
+    if (hit && Date.now() - hit.at < ICON_TTL) return;
+    let alive = true;
+    getJson(`${HELPER}/icon?url=${encodeURIComponent(url)}`).then(
+      (raw) => {
+        const r = raw as { ok?: unknown; data?: { icon?: unknown } } | null;
+        if (!alive || r?.ok !== true) return;
+        const found = r.data?.icon;
+        const next = typeof found === "string" && /^https?:\/\//.test(found) ? found : null;
+        saveIcon(url, next);
+        setIcon(next);
+      },
+      () => {
+        // 係につながらなければ、サイト共通の favicon.ico で出す
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+  return icon;
+}
+
 /**
- * サイト自身のファビコン（/favicon.ico、無ければ /apple-touch-icon.png）を出す。
- * どちらも無ければ名前の頭文字にする。どれも同じ大きさの枠に収める
+ * サイトのアイコン。係がページから探したもの（Google マップのピン・Gmail の M など）を使う。
+ * 係につながらないときはサイト共通の /favicon.ico、それも無ければ名前の頭文字。どれも同じ大きさの枠に収める
  */
 function Favicon({ url, name }: { url: string; name: string }) {
-  const [stage, setStage] = useState(0);
+  const icon = useIconUrl(url);
   const { origin } = new URL(url);
-  const sources = [`${origin}/favicon.ico`, `${origin}/apple-touch-icon.png`];
-  if (stage >= sources.length) {
+  const sources = icon === null ? [] : icon ? [icon, `${origin}/favicon.ico`] : [`${origin}/favicon.ico`, `${origin}/apple-touch-icon.png`];
+  const [failed, setFailed] = useState<string[]>([]);
+  const src = sources.find((u) => !failed.includes(u));
+  if (!src) {
     return <span className="link__icon link__initial">{Array.from(name)[0]?.toUpperCase() ?? "?"}</span>;
   }
+  const fail = () => setFailed((f) => [...f, src]);
   return (
     <img
       className="link__icon"
-      src={sources[stage]}
+      src={src}
       alt=""
       width={20}
       height={20}
       onLoad={(e) => {
         // 1px の透明画像などを返すサイトは、無いものとして次へ
-        if (e.currentTarget.naturalWidth < 8) setStage((n) => n + 1);
+        if (e.currentTarget.naturalWidth < 8) fail();
       }}
-      onError={() => setStage((n) => n + 1)}
+      onError={fail}
     />
   );
 }
