@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import type { NewsItem, NoteItem, Seed } from "../../helper/parse";
+import { useFitLines, useFitList } from "./fit";
 import { HelperTrouble } from "./HelperTrouble";
 import { cleanTag, loadNoteTag, saveNoteTag } from "./settings";
 import { getJson, HELPER, isArrayOf, isObj, str, useRemote } from "./useRemote";
@@ -52,6 +53,7 @@ export function TechNews() {
   const [news, reload] = useRemote(`${HELPER}/technews`, 30 * 60_000, parseNews);
   const [open, setOpen] = useState(false);
   const more = news.state === "ok" ? news.data.more : [];
+  const list = useFitList<HTMLOListElement>();
   return (
     <Read
       id="news-heading"
@@ -68,7 +70,7 @@ export function TechNews() {
       {news.state === "ok" ? (
         <>
           <DateNote date={news.date} />
-          <ol className={`read__list${open ? " read__list--open" : ""}`}>
+          <ol ref={list} className={`read__list${open ? " read__list--open" : ""}`}>
             {[...news.data.highlights, ...(open ? more : [])].map((n, i) => (
               <li key={n.url} style={{ "--i": i } as CSSProperties}>
                 <a href={n.url} {...OUT}>
@@ -94,6 +96,7 @@ export function Seeds() {
   const [index, setIndex] = useState(0);
   const list = seeds.state === "ok" ? seeds.data : [];
   const seed = list.length > 0 ? list[index % list.length] : null;
+  const body = useFitLines<HTMLDivElement>();
   return (
     <Read
       id="seeds-heading"
@@ -112,7 +115,9 @@ export function Seeds() {
           <DateNote date={seeds.date} />
           <p className="read__name">{seed.name}</p>
           <p className="read__genre">{seed.genre}</p>
-          <p className="read__body">{seed.fact}</p>
+          <div ref={body} className="read__fit">
+            <p className="read__body">{seed.fact}</p>
+          </div>
           {seed.sourceUrl && (
             <a className="read__source" href={seed.sourceUrl} {...OUT}>
               {seed.sourceLabel}
@@ -143,6 +148,7 @@ function parseArticle(raw: unknown): Article | null {
 export function Wikipedia() {
   const [article, setArticle] = useState<Article | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "error">("loading");
+  const body = useFitLines<HTMLDivElement>();
   const [seq, setSeq] = useState(0);
 
   useEffect(() => {
@@ -185,7 +191,9 @@ export function Wikipedia() {
           <a className="read__name" href={article.url} {...OUT}>
             {article.title}
           </a>
-          <p className="read__body">{article.extract}</p>
+          <div ref={body} className="read__fit">
+            <p className="read__body">{article.extract}</p>
+          </div>
         </div>
       ) : state === "error" ? (
         <p className="box__quiet">記事を取れませんでした</p>
@@ -201,6 +209,7 @@ export function Note() {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(tag);
   const [notes, reload] = useRemote(`${HELPER}/note?tag=${encodeURIComponent(tag)}`, 30 * 60_000, parseNotes);
+  const list = useFitList<HTMLUListElement>();
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -254,7 +263,7 @@ export function Note() {
       )}
       {notes.state === "ok" ? (
         notes.data.items.length > 0 ? (
-          <ul className="read__list">
+          <ul ref={list} className="read__list">
             {notes.data.items.slice(0, 3).map((n, i) => (
               <li key={n.url} style={{ "--i": i } as CSSProperties}>
                 <a className="note-card" href={n.url} {...OUT}>

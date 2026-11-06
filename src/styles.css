@@ -599,12 +599,17 @@ kbd {
 
 .box__heading {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 10px;
   color: var(--sub);
   font-size: 0.8rem;
   font-weight: 700;
+}
+
+.box__heading h2 {
+  font-size: inherit;
 }
 
 .box__quiet {
@@ -711,18 +716,16 @@ kbd {
   margin-top: 18px;
 }
 
+/* 見出しの右に置く */
 .tally {
-  margin-left: auto;
-  color: var(--sub);
-  font-size: 0.82rem;
-  font-weight: 700;
   white-space: nowrap;
 }
 
 .tally b {
   margin-left: 4px;
   color: var(--c2);
-  font-size: 1.3rem;
+  font-size: 1.15rem;
+  line-height: 1;
 }
 
 .task-form {
@@ -1101,7 +1104,7 @@ kbd {
   overflow: hidden;
   font-size: 0.9rem;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 6;
+  -webkit-line-clamp: var(--lines, 6);
 }
 
 .read__source {
@@ -1601,6 +1604,94 @@ kbd {
   from {
     opacity: 0;
     transform: translateY(16px) scale(0.96);
+  }
+}
+
+/* ===== 広い画面は1画面に収める =====
+   読み物の段が残りの高さを受け持ち、入る分だけ出す。
+   予定が多い日など、読み物の段が 180px を切るときだけページが伸びてスクロールになる。
+   一覧は縦に並べて折り返し、入りきらない行は右の見えない列へ回す（fit.ts が届かないようにする）。
+   本文は包む枠（read__fit）に contain: size を付けて中身の高さを無視させ、fit.ts が枠に入る行数で切る。
+   本文そのものの高さを欄から決める（並べ替えの子にして contain: size を付ける）と、Chrome は行数で切る指定を効かせなかった。 */
+
+@media (min-width: 1024px) {
+  /* clip: 開いた直後に下から浮かび上がる間、はみ出しでスクロールバーが一瞬出るのを防ぐ */
+  .app {
+    display: flex;
+    flex-direction: column;
+    padding-top: 20px;
+    padding-bottom: 24px;
+    overflow: clip;
+  }
+
+  .main {
+    display: grid;
+    flex: 1 0 0;
+    grid-template-rows: auto auto minmax(180px, 1fr);
+  }
+
+  .day {
+    margin-top: 18px;
+  }
+
+  .row {
+    margin-top: 18px;
+  }
+
+  .reads {
+    min-height: 0;
+    margin-top: 20px;
+  }
+
+  .task-form {
+    gap: 8px;
+  }
+
+  .field__input {
+    min-height: 40px;
+  }
+
+  .read {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .read__list {
+    display: flex;
+    flex: 1 1 0;
+    flex-flow: column wrap;
+    align-content: flex-start;
+    gap: 10px 40px;
+    min-height: 0;
+    overflow: clip;
+    overflow-clip-margin: 6px;
+    contain: size;
+  }
+
+  .read__list > li {
+    width: 100%;
+  }
+
+  .read__list--open {
+    display: grid;
+    align-content: start;
+    max-height: none;
+    overflow: hidden auto;
+  }
+
+  .read__swap {
+    display: flex;
+    flex: 1 1 0;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .read__fit {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow: hidden;
+    contain: size;
   }
 }
 

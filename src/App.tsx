@@ -261,9 +261,10 @@ export function App() {
   const taskBox =
     mode === "view" && current ? (
       <section className="box task" aria-labelledby="task-heading">
-        <h2 id="task-heading" className="box__heading">
-          今やること
-        </h2>
+        <div className="box__heading">
+          <h2 id="task-heading">今やること</h2>
+          <Tally today={today} />
+        </div>
         <p className="task__title">{current.title}</p>
         <p key={current.firstStep} className="task__step">
           {current.firstStep}
@@ -278,14 +279,14 @@ export function App() {
           <button id={EDIT_BUTTON} type="button" className="pill" onClick={openEdit} aria-keyshortcuts="E">
             書き直す <kbd>E</kbd>
           </button>
-          <Tally today={today} />
         </div>
       </section>
     ) : (
       <section className="box task" aria-labelledby="task-heading">
-        <h2 id="task-heading" className="box__heading">
-          今やること
-        </h2>
+        <div className="box__heading">
+          <h2 id="task-heading">今やること</h2>
+          <Tally today={today} />
+        </div>
         {mode === "next" && current && <p className="task__title">{current.title}</p>}
         <TaskForm
           key={mode}
@@ -296,11 +297,6 @@ export function App() {
           onSubmit={mode === "next" ? submitNext : mode === "edit" ? submitEdit : submitStart}
           onCancel={mode === "start" ? undefined : cancel}
         />
-        {mode === "start" && (
-          <div className="task__foot">
-            <Tally today={today} />
-          </div>
-        )}
       </section>
     );
 
