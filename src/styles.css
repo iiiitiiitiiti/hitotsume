@@ -632,6 +632,11 @@ kbd {
   text-underline-offset: 3px;
 }
 
+.text-button[aria-disabled="true"] {
+  cursor: default;
+  text-decoration: none;
+}
+
 .pill {
   display: inline-flex;
   align-items: center;

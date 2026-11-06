@@ -181,12 +181,21 @@ export function Wikipedia() {
       title="Wikipedia"
       tone="--ink"
       action={
-        <button type="button" className="text-button" onClick={() => setSeq((n) => n + 1)}>
-          別の記事
-        </button>
+        // 引き直している間は今の記事を残し、ボタンの文字で知らせる。
+        // disabled にすると押した直後にキーボードの位置が外れるので、押しても何もしないだけにする
+        (article || state === "error") && (
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => state !== "loading" && setSeq((n) => n + 1)}
+            aria-disabled={state === "loading"}
+          >
+            {state === "loading" ? "読み込み中" : "別の記事"}
+          </button>
+        )
       }
     >
-      {state === "ok" && article ? (
+      {article && state !== "error" ? (
         <div key={article.url} className="read__swap">
           <a className="read__name" href={article.url} {...OUT}>
             {article.title}
